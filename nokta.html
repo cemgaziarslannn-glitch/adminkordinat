@@ -7,65 +7,68 @@
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
 <style>
 body { margin:0; font-family:'Montserrat', sans-serif; background:#2c3e50; color:#ecf0f1; }
-.container { max-width:800px; margin:20px auto; padding:20px; background: rgba(0,0,0,0.3); border-radius:12px; }
+.container { max-width:800px; margin:80px auto 20px; padding:20px; background: rgba(0,0,0,0.3); border-radius:12px; }
 h1 { text-align:center; margin-bottom:20px; }
 input, button { padding:10px; margin:5px 0; border-radius:8px; border:none; font-size:16px; }
 button { cursor:pointer; font-weight:600; transition:0.3s; }
 button:hover { opacity:0.9; }
-#qrList div { margin:10px 0; padding:10px; background: rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
-.qrCodeImg { width:300px; height:300px; border:1px solid #fff; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+#qrList div { margin:10px 0; padding:15px; background: rgba(255,255,255,0.1); border-radius:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.qrCodeImg { width:150px; height:150px; border:1px solid #fff; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#fff; padding:5px; }
+.gps-info { font-size: 12px; color: #bdc3c7; margin-top: 5px; }
 
-/* Çıkış butonu sağ üst köşe */
-#logoutBtn {
-  position:fixed;
-  top:20px;
-  right:20px;
-  background:#e74c3c;
-  color:#fff;
-  padding:12px 20px;
-  border-radius:10px;
-  border:none;
-  font-weight:600;
-  cursor:pointer;
-  z-index:1000;
-  transition:0.3s;
-}
-#logoutBtn:hover { opacity:0.9; }
+#logoutBtn { position:fixed; top:20px; right:20px; background:#e74c3c; color:#fff; padding:12px 20px; border-radius:10px; border:none; font-weight:600; cursor:pointer; z-index:1000; transition:0.3s; }
+
+/* Hassas Koordinat Overlay */
+#gpsProgressOverlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:white; z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
 </style>
 </head>
 <body>
 
-<!-- Çıkış Butonu -->
 <button id="logoutBtn">Çıkış</button>
+
+<div id="gpsProgressOverlay">
+    <div style="border:2px solid #3498db; padding:30px; border-radius:15px; background:#1a252f;">
+        <h2 style="color:#3498db; margin:0;">HASSAS REFERANS KAYDI</h2>
+        <p id="gpsStatusMsg">Sinyal aranıyor...</p>
+        <div id="gpsProgressText" style="font-size:50px; font-weight:bold; color:#2ecc71; margin:15px 0;">0 / 10</div>
+        <div style="width:200px; height:10px; background:#444; border-radius:5px; margin:0 auto; overflow:hidden;">
+            <div id="gpsProgressBar" style="width:0%; height:100%; background:#2ecc71; transition:0.3s;"></div>
+        </div>
+        <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
+            <button id="gpsSaveBtn" disabled style="background:#27ae60; color:white; padding:10px; width:120px; opacity:0.5;">KAYDET</button>
+            <button id="gpsCancelBtn" style="background:#c0392b; color:white; padding:10px; width:120px;">İPTAL</button>
+        </div>
+    </div>
+</div>
 
 <div class="container">
   <h1>Admin Panel - Nöbet Noktaları & QR Kodlar</h1>
-
   <label>Nöbet Noktası Adı:</label>
   <input type="text" id="pointName" placeholder="Örn: Arka Bahçe">
   <button id="generateQRBtn" style="background:#27ae60; color:#fff;">QR Kod Oluştur & Kaydet</button>
-  
   <h2>Oluşturulan QR Kodlar</h2>
   <div id="qrList"></div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-import { getDatabase, ref, set, remove, onValue, serverTimestamp, get } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getDatabase, ref, set, onValue, serverTimestamp, get, update } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
-async function initPage(){
+const pointName = document.getElementById('pointName');
+const generateQRBtn = document.getElementById('generateQRBtn');
+const qrList = document.getElementById('qrList');
+const logoutBtn = document.getElementById('logoutBtn');
 
-  // 🔹 Seçilen siteyi ana panelden al
-  const selectedSiteId = sessionStorage.getItem("selectedSite");
-  if(!selectedSiteId){
-    alert("Lütfen ana panelden bir site seçin!");
-    window.location.href = "index.html";
-    return;
-  }
+logoutBtn.addEventListener('click', ()=> { window.location.href = 'mod.html'; });
 
-  // 🔹 Merkez DB başlat
-  const merkezConfig = {
-       apiKey: "AIzaSyAM5NHBpRHIlttNXwJ9YKDypR4eoyQbDeM",
+// QR kütüphanesi
+const QR_SCRIPT = document.createElement('script');
+QR_SCRIPT.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
+document.body.appendChild(QR_SCRIPT);
+await new Promise(resolve => QR_SCRIPT.onload = resolve);
+
+const merkezConfig = {
+  apiKey: "AIzaSyAM5NHBpRHIlttNXwJ9YKDypR4eoyQbDeM",
   authDomain: "kolartguvenlik-e002d.firebaseapp.com",
   databaseURL: "https://kolartguvenlik-e002d-default-rtdb.firebaseio.com",
   projectId: "kolartguvenlik-e002d",
@@ -73,143 +76,136 @@ async function initPage(){
   messagingSenderId: "212955174898",
   appId: "1:212955174898:web:f77501991c1648fb66bd6b",
   measurementId: "G-TCGDNDYY6Y"
-  };
-  const merkezApp = initializeApp(merkezConfig, "merkez");
-  const merkezDb = getDatabase(merkezApp);
+};
+const merkezApp = initializeApp(merkezConfig, "merkez");
+const merkezDb = getDatabase(merkezApp);
 
-  // 🔹 Site config’i merkezden al
-  const siteConfigSnap = await get(ref(merkezDb, "sites/" + selectedSiteId + "/config"));
-  if(!siteConfigSnap.exists()){
-    alert("Site config bulunamadı!");
-    window.location.href = "index.html";
-    return;
-  }
-  const siteConfig = siteConfigSnap.val();
+const selectedSiteId = sessionStorage.getItem("selectedSite");
+const siteConfigSnap = await get(ref(merkezDb, "sites/" + selectedSiteId + "/config"));
+const siteConfig = siteConfigSnap.val();
+const siteApp = initializeApp(siteConfig, selectedSiteId);
+const db = getDatabase(siteApp);
 
-  // 🔹 Site DB başlat
-  const siteApp = initializeApp(siteConfig, selectedSiteId);
-  const db = getDatabase(siteApp);
+function calculateAvg(list) {
+    const sum = list.reduce((a, b) => ({ lat: a.lat + b.lat, lon: a.lon + b.lon }), { lat: 0, lon: 0 });
+    return { lat: sum.lat / list.length, lon: sum.lon / list.length };
+}
 
-  // DOM
-  const pointName = document.getElementById('pointName');
-  const generateQRBtn = document.getElementById('generateQRBtn');
-  const qrList = document.getElementById('qrList');
-  const logoutBtn = document.getElementById('logoutBtn');
+function createSafeQRId(name){
+    return btoa(unescape(encodeURIComponent(name))) + '_' + Date.now();
+}
 
-  // Çıkış butonu yönlendirme
-  logoutBtn.addEventListener('click', ()=> {
-    window.location.href = 'mod.html';
-  });
-
-  // QR kütüphanesi yükle
-  const QR_SCRIPT = document.createElement('script');
-  QR_SCRIPT.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
-  document.body.appendChild(QR_SCRIPT);
-  await new Promise(resolve => QR_SCRIPT.onload = resolve); // 🔹 QR script yüklensin
-
-  // Güvenli QR ID oluştur: ASCII safe Base64
-  function createSafeQRId(name){
-    const utf8Name = unescape(encodeURIComponent(name));
-    const base64 = btoa(utf8Name);
-    return base64 + '_' + Date.now();
-  }
-
-  // QR kod oluştur ve Firebase kaydet
-  generateQRBtn.addEventListener('click', async () => {
+generateQRBtn.addEventListener('click', async () => {
     generateQRBtn.disabled = true;
     const name = pointName.value.trim();
     if (!name) { alert("Nöbet noktası adını girin!"); generateQRBtn.disabled=false; return; }
-
     const qrId = createSafeQRId(name);
-    const qrData = { name, qrId, timestamp: serverTimestamp() };
-    await set(ref(db,'qrNoktas/'+qrId), qrData);
-
-    pointName.value='';
+    const qrData = { name, qrId, timestamp: serverTimestamp(), lat: null, lon: null };
+    await set(ref(db, 'qrNoktas/' + qrId), qrData);
+    pointName.value = '';
     generateQRBtn.disabled = false;
-  });
+});
 
-  // QR kodları yükle ve listele
-  onValue(ref(db,'qrNoktas'), snapshot => {
+onValue(ref(db, 'qrNoktas'), snapshot => {
     qrList.innerHTML = '';
     const data = snapshot.val();
-    if(data){
-      Object.values(data).forEach(addQRToList);
-    }
-  });
-
-  // Listeye ekleme
-  function addQRToList(qrData){
-    const div = document.createElement('div');
-    div.style.display='flex'; div.style.alignItems='center'; div.style.gap='10px'; div.style.flexWrap='wrap'; div.style.margin='10px 0'; div.style.padding='10px'; div.style.background='rgba(255,255,255,0.1)'; div.style.borderRadius='8px';
-
-    const qrDiv = document.createElement('div');
-    qrDiv.classList.add('qrCodeImg');
-    new QRCode(qrDiv, { text: qrData.qrId, width:300, height:300, correctLevel:QRCode.CorrectLevel.H });
-
-    const infoDiv = document.createElement('div');
-    infoDiv.innerHTML=`<strong>${qrData.name}</strong><br>ID: ${qrData.qrId}`;
-
-    const downloadBtn = document.createElement('button');
-    downloadBtn.textContent='İndir';
-    downloadBtn.style.background='#2980b9'; downloadBtn.style.color='#fff';
-   downloadBtn.addEventListener('click', () => {
-    const originalCanvas = qrDiv.querySelector('canvas');
-    if (originalCanvas) {
-        // 1. Yeni bir geçici canvas oluştur (QR + Alt Bilgi alanı için biraz daha yüksek)
-        const tempCanvas = document.createElement('canvas');
-        const ctx = tempCanvas.getContext('2d');
-        const padding = 40; // Yazı için alt kısma eklenecek boşluk
-        
-        tempCanvas.width = originalCanvas.width;
-        tempCanvas.height = originalCanvas.height + padding;
-
-        // 2. Arka planı beyaz yap (PNG şeffaf gelmesin diye)
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-
-        // 3. QR kodu en üste çiz
-        ctx.drawImage(originalCanvas, 0, 0);
-
-        // 4. Yazı stilini ayarla ve ismi alta yaz
-        ctx.fillStyle = "#000000"; // Siyah yazı
-        ctx.font = "bold 18px Montserrat, Arial";
-        ctx.textAlign = "center";
-        
-        // Yazıyı QR'ın altına ortala
-        ctx.fillText(qrData.name, tempCanvas.width / 2, originalCanvas.height + 25);
-
-        // 5. Birleştirilmiş resmi indir
-        const url = tempCanvas.toDataURL("image/png");
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `QR_${qrData.name}.png`;
-        a.click();
+    if (data) {
+        Object.values(data).sort((a, b) => b.timestamp - a.timestamp).forEach(addQRToList);
     }
 });
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent='Sil';
-    deleteBtn.style.background='#c0392b'; deleteBtn.style.color='#fff';
-    deleteBtn.addEventListener('click', async ()=>{
-      if(confirm(`"${qrData.name}" QR kodunu silmek istediğinize emin misiniz?`)){
-        await remove(ref(db,'qrNoktas/'+qrData.qrId));
-      }
-    });
+function addQRToList(qrData) {
+    const div = document.createElement('div');
+    const qrDiv = document.createElement('div');
+    qrDiv.classList.add('qrCodeImg');
+    new QRCode(qrDiv, { text: qrData.qrId, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.H });
 
-    div.appendChild(qrDiv);
-    div.appendChild(infoDiv);
-    div.appendChild(downloadBtn);
-    div.appendChild(deleteBtn);
+    const infoDiv = document.createElement('div');
+    infoDiv.style.flex = "1";
+    infoDiv.style.marginLeft = "15px";
+    const coords = qrData.lat ? `(${qrData.lat.toFixed(4)}, ${qrData.lon.toFixed(4)})` : '(Koordinat Yok)';
+    infoDiv.innerHTML = `<strong>${qrData.name}</strong><br><small>ID: ${qrData.qrId}</small><br><div class="gps-info">Koordinat: ${coords}</div>`;
+
+    const btnGroup = document.createElement('div');
+    btnGroup.style.display = "flex";
+    btnGroup.style.flexDirection = "column";
+    btnGroup.style.gap = "5px";
+
+    const coordBtn = document.createElement('button');
+    coordBtn.textContent = 'Koordinat Ata';
+    coordBtn.style.background = '#3498db';
+    coordBtn.style.color = '#fff';
+    coordBtn.style.fontSize = '12px';
+    coordBtn.addEventListener('click', () => assignCoordinates(qrData));
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.textContent = 'İndir';
+    downloadBtn.style.background = '#27ae60';
+    downloadBtn.style.color = '#fff';
+    downloadBtn.style.fontSize = '12px';
+    downloadBtn.onclick = () => {
+        const canvas = qrDiv.querySelector('canvas');
+        const tempCanvas = document.createElement('canvas');
+        const ctx = tempCanvas.getContext('2d');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height + 40;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        ctx.drawImage(canvas, 0, 0);
+        ctx.fillStyle = "#000000";
+        ctx.font = "bold 16px Montserrat";
+        ctx.textAlign = "center";
+        ctx.fillText(qrData.name, tempCanvas.width / 2, canvas.height + 25);
+        const a = document.createElement('a');
+        a.href = tempCanvas.toDataURL("image/png");
+        a.download = `QR_${qrData.name}.png`;
+        a.click();
+    };
+
+    btnGroup.append(coordBtn, downloadBtn);
+    div.append(qrDiv, infoDiv, btnGroup);
     qrList.appendChild(div);
-  }
-
 }
 
-// Sayfa açıldığında başlat
-initPage();
+async function assignCoordinates(qrData) {
+    if (!navigator.geolocation) return alert("GPS Yok!");
+    const overlay = document.getElementById('gpsProgressOverlay');
+    const statusMsg = document.getElementById('gpsStatusMsg');
+    const progressText = document.getElementById('gpsProgressText');
+    const progressBar = document.getElementById('gpsProgressBar');
+    const saveBtn = document.getElementById('gpsSaveBtn');
+    const cancelBtn = document.getElementById('gpsCancelBtn');
 
+    overlay.style.display = 'flex';
+    let collected = [];
+    const max = 10;
+    saveBtn.disabled = true; saveBtn.style.opacity = "0.5";
+    progressText.innerText = "0 / 10"; progressBar.style.width = "0%";
+
+    const collectInterval = setInterval(() => {
+        if (collected.length >= max) return;
+        navigator.geolocation.getCurrentPosition(pos => {
+            collected.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+            statusMsg.innerText = "Sinyal alınıyor, sabit kalın...";
+            progressText.innerText = `${collected.length} / ${max}`;
+            progressBar.style.width = `${(collected.length / max) * 100}%`;
+            if (collected.length >= max) {
+                saveBtn.disabled = false; saveBtn.style.opacity = "1";
+                statusMsg.innerText = "Ölçüm bitti, onay bekliyor.";
+            }
+        }, err => { statusMsg.innerText = "Sinyal bekleniyor..."; }, { enableHighAccuracy: true, timeout: 5000 });
+    }, 1500);
+
+    saveBtn.onclick = async () => {
+        const avg = calculateAvg(collected);
+        clearInterval(collectInterval);
+        overlay.style.display = 'none';
+        await update(ref(db, 'qrNoktas/' + qrData.qrId), { lat: avg.lat, lon: avg.lon });
+        alert("Koordinat mühürlendi!");
+    };
+
+    cancelBtn.onclick = () => { clearInterval(collectInterval); overlay.style.display = 'none'; };
+}
 </script>
 </body>
 </html>
-
-
