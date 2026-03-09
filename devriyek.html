@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CGA MASTER | SECURITY COMMAND</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Montserrat:wght@300;600;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <style>
+        :root { --bg: #05070a; --panel: #0f1218; --accent: #00d2ff; --success: #00ff88; --danger: #ff4d4d; --border: rgba(255,255,255,0.08); }
+        
+        body { background: var(--bg); color: #e0e0e0; font-family: 'Montserrat', sans-serif; margin: 0; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        
+        /* Navigasyon ve Geri Butonu */
+        nav { 
+            height: auto; min-height: 80px; background: rgba(15, 18, 24, 0.8); 
+            backdrop-filter: blur(15px); display: flex; flex-wrap: wrap; 
+            align-items: center; justify-content: space-between; padding: 10px 20px; 
+            border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1000; 
+        }
+
+        .nav-left { display: flex; flex-direction: column; }
+        .nav-right { display: flex; align-items: center; gap: 15px; }
+
+        .logo { font-weight: 900; letter-spacing: 2px; color: var(--accent); font-size: 1.2rem; text-transform: uppercase; }
+        .logo span { color: #fff; opacity: 0.5; font-size: 0.7rem; display: block; letter-spacing: 1px; }
+
+        /* Yeni Geri Butonu Stili */
+        .btn-back {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-size: 0.7rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+        .btn-back:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+        .container { max-width: 1600px; margin: 20px auto; padding: 0 15px; }
+
+        .master-input { 
+            background: #161b22; border: 1px solid var(--border); color: #fff; 
+            padding: 12px; border-radius: 8px; font-family: 'JetBrains Mono'; 
+            transition: 0.3s; width: 100%; box-sizing: border-box; font-size: 16px;
+        }
+        .master-input:focus { border-color: var(--accent); outline: none; }
+
+        .table-card { 
+            background: var(--panel); padding: 15px; border-radius: 16px; 
+            border: 1px solid var(--border); box-shadow: 0 20px 40px rgba(0,0,0,0.4); 
+            overflow-x: auto; 
+        }
+
+        .btn { 
+            padding: 12px 20px; border-radius: 12px; border: none; 
+            font-weight: 800; cursor: pointer; transition: 0.3s; 
+            text-transform: uppercase; font-size: 0.7rem; 
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .btn-add { background: linear-gradient(45deg, var(--success), #00cc6e); color: #000; width: 100%; margin-bottom: 20px; }
+        .btn-point { background: rgba(0, 210, 255, 0.1); color: var(--accent); border: 1px solid var(--accent); margin-right: 5px;}
+        .btn-delete { background: rgba(255, 77, 77, 0.1); color: var(--danger); border: 1px solid var(--danger); }
+
+        #masterTable { font-size: 0.85rem; width: 100% !important; }
+        #masterTable th { text-align: left; padding: 15px; color: var(--accent); text-transform: uppercase; }
+        #masterTable td { padding: 12px; border-bottom: 1px solid var(--border); }
+
+        .modal { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); 
+            backdrop-filter: blur(10px); display: none; z-index: 2000; 
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-content { 
+            background: var(--panel); width: 100%; max-width: 450px; 
+            padding: 25px; border-radius: 24px; border: 1px solid var(--accent); 
+        }
+
+        #toast { 
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+            background: var(--success); color: #000; padding: 12px 30px; 
+            border-radius: 50px; font-weight: 900; display: none; z-index: 10000; 
+        }
+
+        @media (max-width: 768px) {
+            nav { flex-direction: column; gap: 15px; text-align: center; }
+            .nav-right { width: 100%; justify-content: center; flex-direction: column; }
+            .btn-back { position: absolute; top: 15px; right: 15px; padding: 5px 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="nav-left">
+        <div class="logo">CGA <span>SECURITY COMMAND</span></div>
+        <span id="activeSiteName" style="color:var(--success); font-weight:600; font-size:0.75rem; margin-top:5px;">YÜKLENİYOR...</span>
+    </div>
+    
+    <div class="nav-right">
+        <div style="display:flex; align-items:center; gap:5px;">
+            <span style="font-size: 0.6rem; font-weight: 800; color: var(--accent);">TARİH:</span>
+            <input type="date" id="viewDate" class="master-input" style="width: 140px; padding: 5px; height: 35px; font-size: 0.8rem;">
+        </div>
+        <a href="javascript:history.back()" class="btn-back">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"></path></svg>
+            GERİ DÖN
+        </a>
+    </div>
+</nav>
+
+<div id="toast">GÜNCELLENDİ ✓</div>
+
+<div class="container">
+    <button class="btn btn-add" id="openAddBtn">+ YENİ GÜVENLİK DEVREYESİ EKLE</button>
+    <div class="table-card">
+        <table id="masterTable" class="display nowrap">
+            <thead>
+                <tr>
+                    <th>PERSONEL</th>
+                    <th>TARİH</th>
+                    <th>DURUM</th>
+                    <th>ZAMAN</th>
+                    <th>VERİ</th>
+                    <th>İŞLEM</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="addModal" class="modal">
+    <div class="modal-content">
+        <h2 style="color:var(--accent); margin-top:0; font-size:1.2rem;">Yeni Kayıt</h2>
+        <div style="display:flex; flex-direction:column; gap:15px;">
+            <select id="staffList" class="master-input"></select>
+            <div style="display:flex; gap:10px;">
+                <input type="time" id="newStart" class="master-input" value="08:00">
+                <input type="time" id="newEnd" class="master-input" value="17:00">
+            </div>
+            <button class="btn btn-add" id="saveEntryBtn" style="margin:0;">SİSTEME İŞLE</button>
+            <button class="btn btn-delete" style="background:none;" onclick="$('#addModal').hide()">VAZGEÇ</button>
+        </div>
+    </div>
+</div>
+<div id="pointModal" class="modal"><div class="modal-content" id="pContent"></div></div>
+
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+const config = {
+    apiKey: "AIzaSyAM5NHBpRHIlttNXwJ9YKDypR4eoyQbDeM",
+    authDomain: "kolartguvenlik-e002d.firebaseapp.com",
+    databaseURL: "https://kolartguvenlik-e002d-default-rtdb.firebaseio.com",
+    projectId: "kolartguvenlik-e002d"
+};
+
+const merkezApp = initializeApp(config, "merkez");
+const merkezDb = getDatabase(merkezApp);
+const selectedSiteId = sessionStorage.getItem("selectedSite") || sessionStorage.getItem("selectedSiteId");
+
+let siteDb, table, currentDayRecords = {};
+
+async function initSystem() {
+    if (!selectedSiteId) { alert("Site seçilmedi!"); window.location.href = "index.html"; return; }
+
+    // DataTable'ı başlat (Sadece 1 kez!)
+    table = $('#masterTable').DataTable({
+        responsive: true, scrollX: true, pageLength: 20, dom: 'rtip',
+        language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/tr.json' }
+    });
+
+    try {
+        const snap = await get(ref(merkezDb, `sites/${selectedSiteId}/config`));
+        if (snap.exists()) {
+            siteDb = getDatabase(initializeApp(snap.val(), selectedSiteId));
+            document.getElementById("activeSiteName").innerText = "AKTİF SİTE: " + selectedSiteId;
+            $('#viewDate').val(new Date().toISOString().split('T')[0]).change(loadData);
+            loadData();
+        }
+    } catch (e) { console.error(e); }
+}
+
+async function loadData() {
+    const vDate = $('#viewDate').val();
+    const snap = await get(ref(siteDb, `devriyeHistory/${vDate}`));
+    table.clear(); currentDayRecords = {};
+    if (snap.exists()) {
+        Object.entries(snap.val()).forEach(([person, records]) => {
+            Object.entries(records).forEach(([id, row]) => {
+                currentDayRecords[id] = row;
+                const path = `devriyeHistory/${vDate}/${person}/${id}`;
+                table.row.add([
+                    `<input class="master-input" style="height:30px; padding:5px;" value="${row.user || person}" onchange="window.updateVal('${path}', 'user', this.value)">`,
+                    `<input type="date" class="master-input" style="height:30px; padding:5px;" value="${vDate}" onchange="window.moveRecord('${vDate}', '${person}', '${id}', this.value)">`,
+                    `<select class="master-input" style="height:30px; padding:5px;" onchange="window.updateVal('${path}', 'status', this.value)">
+                        <option value="Tam devriye" ${row.status === 'Tam devriye' ? 'selected':''}>TAM</option>
+                        <option value="Eksik devriye" ${row.status === 'Eksik devriye' ? 'selected':''}>EKSİK</option>
+                    </select>`,
+                    `<div style="display:flex; gap:2px;">
+                        <input type="time" class="master-input" style="height:30px; font-size:11px;" value="${row.start || '00:00'}" onchange="window.updateVal('${path}', 'start', this.value)">
+                        <input type="time" class="master-input" style="height:30px; font-size:11px;" value="${row.end || '00:00'}" onchange="window.updateVal('${path}', 'end', this.value)">
+                    </div>`,
+                    `<button class="btn btn-point" onclick="window.viewPoints('${id}')">ANALİZ</button>`,
+                    `<button class="btn btn-delete" onclick="window.deleteEntry('${path}')">SİL</button>`
+                ]);
+            });
+        });
+    }
+    table.draw();
+}
+
+// Global İşlemler
+window.updateVal = async (path, f, v) => { await update(ref(siteDb, path), { [f]: v }); $('#toast').fadeIn().delay(1000).fadeOut(); };
+window.deleteEntry = async (p) => { if(confirm("Silinsin mi?")) { await remove(ref(siteDb, p)); loadData(); } };
+window.viewPoints = (id) => {
+    const d = currentDayRecords[id];
+    let h = `<h2 style="color:var(--accent); font-size:1rem;">Analiz: ${d.user}</h2><div style="max-height:300px; overflow-y:auto;">`;
+    if(d.points) Object.values(d.points).forEach(p => h += `<div style="padding:10px; border-bottom:1px solid #222; font-size:0.8rem;">📍 ${p.name} <span style="float:right; color:var(--accent)">${p.time}</span></div>`);
+    else h += "<p>Kayıt yok.</p>";
+    h += `</div><button class="btn btn-delete" style="width:100%; margin-top:10px;" onclick="$('#pointModal').hide()">KAPAT</button>`;
+    $('#pContent').html(h); $('#pointModal').css('display', 'flex');
+};
+window.moveRecord = async (oD, p, id, nD) => {
+    const path = `devriyeHistory/${oD}/${p}/${id}`;
+    const snap = await get(ref(siteDb, path));
+    if(snap.exists()){ await set(ref(siteDb, `devriyeHistory/${nD}/${p}/${id}`), snap.val()); await remove(ref(siteDb, path)); loadData(); }
+};
+
+// Eventler
+$('#openAddBtn').click(async () => {
+    const s = await get(ref(siteDb, "users"));
+    let o = "";
+    if(s.exists()) Object.values(s.val()).forEach(u => u.type?.toLowerCase()==="security" && (o += `<option value="${u.username}">${u.username}</option>`));
+    $('#staffList').html(o); $('#addModal').css('display', 'flex');
+});
+
+$('#saveEntryBtn').click(async () => {
+    const n = $('#staffList').val(), d = $('#viewDate').val(), id = "CGA_" + Date.now();
+    await set(ref(siteDb, `devriyeHistory/${d}/${n}/${id}`), { user: n, start: $('#newStart').val(), end: $('#newEnd').val(), status: "Tam devriye", timestamp: Date.now() });
+    $('#addModal').hide(); loadData();
+});
+
+initSystem();
+</script>
+</body>
+</html>
