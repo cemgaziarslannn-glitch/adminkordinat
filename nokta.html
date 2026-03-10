@@ -253,7 +253,7 @@ async function assignCoordinates(qrData) {
                 statusMsg.innerText = "Analiz Tamamlandı.";
             }
         }, err => { statusMsg.innerText = "Sinyal bekleniyor (Zayıf)..."; }, geoOpts);
-    }, 2000); // 2 saniyede bir hassas ölçüm
+    }, 10000); // 2 saniyede bir hassas ölçüm
 
     saveBtn.onclick = async () => {
         const avg = calculateAvg(collected);
