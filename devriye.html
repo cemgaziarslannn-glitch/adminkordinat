@@ -222,7 +222,7 @@ async function assignCoordinates(qrData) {
   const max = 10;
 
   // Ayarlar: Taze veri çekmek için maximumAge: 0
-  const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+  const geoOpts = { enableHighAccuracy: true, timeout: 600000, maximumAge: 0 };
 
   const collectInterval = setInterval(() => {
     if(collected.length >= max) return;
@@ -254,7 +254,7 @@ async function assignCoordinates(qrData) {
             statusMsg.innerText = "Veri toplama bitti. Analizi başlatın.";
         }
     }, err => { statusMsg.innerText = "GPS Sinyali Bekleniyor..."; }, geoOpts);
-  }, 60000);
+  }, 10000);
 
   calcAvgBtn.onclick = () => {
       const avg = calculateAvg(collected);
