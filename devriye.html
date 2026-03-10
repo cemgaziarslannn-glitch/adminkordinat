@@ -207,62 +207,98 @@ function addQRToList(qrData){
 }
 
 // 🔹 ANALİZLİ HASSAS KOORDİNAT ATA
+// 🔹 ANALİZLİ HASSAS KOORDİNAT ATA (Düzeltilmiş Kaydet Mantığı)
 async function assignCoordinates(qrData) {
-  const overlay = document.getElementById('gpsProgressOverlay');
-  const statusMsg = document.getElementById('gpsStatusMsg');
-  const gpsRows = document.getElementById('gpsRows');
-  const progressText = document.getElementById('gpsProgressText');
-  const calcAvgBtn = document.getElementById('calcAvgBtn');
-  const saveBtn = document.getElementById('gpsSaveBtn');
-  
-  overlay.style.display = 'flex';
-  gpsRows.innerHTML = '';
-  document.getElementById('resultArea').style.display = 'none';
-  let collected = [];
-  const max = 10;
+  const overlay = document.getElementById('gpsProgressOverlay');
+  const statusMsg = document.getElementById('gpsStatusMsg');
+  const gpsRows = document.getElementById('gpsRows');
+  const progressText = document.getElementById('gpsProgressText');
+  const calcAvgBtn = document.getElementById('calcAvgBtn');
+  const saveBtn = document.getElementById('gpsSaveBtn');
+  
+  overlay.style.display = 'flex';
+  gpsRows.innerHTML = '';
+  document.getElementById('resultArea').style.display = 'none';
+  let collected = [];
+  const max = 10;
 
-  // Ayarlar: Taze veri çekmek için maximumAge: 0
-  const geoOpts = { enableHighAccuracy: true, timeout: 600000, maximumAge: 0 };
+  const geoOpts = { enableHighAccuracy: true, timeout: 600000, maximumAge: 0 };
 
-  const collectInterval = setInterval(() => {
-    if(collected.length >= max) return;
+  const collectInterval = setInterval(() => {
+    if(collected.length >= max) return;
 
-    navigator.geolocation.getCurrentPosition(pos => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        let diffText = "Referans";
+    navigator.geolocation.getCurrentPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        let diffText = "Referans";
 
-        if(collected.length > 0) {
-            const prev = collected[collected.length - 1];
-            const d = getDistance(prev.lat, prev.lon, lat, lon);
-            const color = d > 20 ? '#e74c3c' : (d > 5 ? '#f1c40f' : '#2ecc71');
-            diffText = `<span style="color:${color}">${d.toFixed(2)}m</span>`;
-        }
+        if(collected.length > 0) {
+            const prev = collected[collected.length - 1];
+            const d = getDistance(prev.lat, prev.lon, lat, lon);
+            const color = d > 20 ? '#e74c3c' : (d > 5 ? '#f1c40f' : '#2ecc71');
+            diffText = `<span style="color:${color}">${d.toFixed(2)}m</span>`;
+        }
 
-        collected.push({ lat, lon });
-        
-        const row = document.createElement('div');
-        row.className = 'gps-row';
-        row.innerHTML = `<span style="width:10%">#${collected.length}</span><span style="width:65%">${lat.toFixed(7)}, ${lon.toFixed(7)}</span><span style="width:25%; text-align:right;">${diffText}</span>`;
-        gpsRows.appendChild(row);
-        gpsRows.scrollTop = gpsRows.scrollHeight;
-        progressText.innerText = `${collected.length} / ${max}`;
+        collected.push({ lat, lon });
+        
+        const row = document.createElement('div');
+        row.className = 'gps-row';
+        row.innerHTML = `<span style="width:10%">#${collected.length}</span><span style="width:65%">${lat.toFixed(7)}, ${lon.toFixed(7)}</span><span style="width:25%; text-align:right;">${diffText}</span>`;
+        gpsRows.appendChild(row);
+        gpsRows.scrollTop = gpsRows.scrollHeight;
+        progressText.innerText = `${collected.length} / ${max}`;
 
-        if(collected.length >= max) {
-            clearInterval(collectInterval);
-            calcAvgBtn.disabled = false; calcAvgBtn.style.opacity = "1";
-            statusMsg.innerText = "Veri toplama bitti. Analizi başlatın.";
-        }
-    }, err => { statusMsg.innerText = "GPS Sinyali Bekleniyor..."; }, geoOpts);
-  }, 10000);
+        if(collected.length >= max) {
+            clearInterval(collectInterval);
+            calcAvgBtn.disabled = false; calcAvgBtn.style.opacity = "1";
+            statusMsg.innerText = "Veri toplama bitti. Analizi başlatın.";
+        }
+    }, err => { statusMsg.innerText = "GPS Sinyali Bekleniyor..."; }, geoOpts);
+  }, 10000);
 
-  calcAvgBtn.onclick = () => {
-      const avg = calculateAvg(collected);
-      document.getElementById('finalAvgText').innerText = `LAT: ${avg.lat.toFixed(8)} | LON: ${avg.lon.toFixed(8)}`;
-      document.getElementById('resultArea').style.display = 'block';
-      saveBtn.disabled = false; saveBtn.style.opacity = "1";
-      calcAvgBtn.style.display = "none";
-  };
+  calcAvgBtn.onclick = () => {
+      const avg = calculateAvg(collected);
+      document.getElementById('finalAvgText').innerText = `LAT: ${avg.lat.toFixed(8)} | LON: ${avg.lon.toFixed(8)}`;
+      document.getElementById('resultArea').style.display = 'block';
+      saveBtn.disabled = false; saveBtn.style.opacity = "1";
+      calcAvgBtn.style.display = "none";
+  };
+
+  saveBtn.onclick = async () => {
+      try {
+          const avg = calculateAvg(collected);
+          // Doğru yolu belirle (Sonuna mutlaka / ekliyoruz)
+          let basePath = qrData.block ? qrData.block + "qrcodes/" : "qrCodes/";
+          
+          const snap = await get(ref(db, basePath));
+          if (snap.exists()) {
+              const data = snap.val();
+              // qrId üzerinden doğru anahtarı (key) bul
+              const key = Object.keys(data).find(k => data[k].qrId === qrData.qrId);
+              
+              if (key) {
+                  await update(ref(db, basePath + key), { 
+                      lat: avg.lat, 
+                      lon: avg.lon 
+                  });
+                  alert("Nokta Mühürlendi!");
+                  overlay.style.display = 'none';
+                  loadQRCodes(blockDropdown.value);
+              } else {
+                  alert("Hata: Veritabanı anahtarı bulunamadı.");
+              }
+          }
+      } catch (error) {
+          console.error("Kaydetme hatası:", error);
+          alert("Kaydedilirken bir hata oluştu!");
+      }
+  };
+
+  document.getElementById('gpsCancelBtn').onclick = () => { 
+      clearInterval(collectInterval); 
+      overlay.style.display = 'none'; 
+  };
+
 
   saveBtn.onclick = async () => {
       const avg = calculateAvg(collected);
