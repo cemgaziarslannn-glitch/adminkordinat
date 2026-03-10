@@ -15,11 +15,16 @@ button:hover { opacity:0.9; }
 #qrList div { margin:10px 0; padding:15px; background: rgba(255,255,255,0.1); border-radius:12px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; }
 .qrCodeImg { width:150px; height:150px; border:1px solid #fff; border-radius:8px; display:flex; align-items:center; justify-content:center; background:#fff; padding:5px; }
 .gps-info { font-size: 12px; color: #bdc3c7; margin-top: 5px; }
+.gps-active { color: #2ecc71; font-weight: bold; }
 
 #logoutBtn { position:fixed; top:20px; right:20px; background:#e74c3c; color:#fff; padding:12px 20px; border-radius:10px; border:none; font-weight:600; cursor:pointer; z-index:1000; transition:0.3s; }
 
-/* Hassas Koordinat Overlay */
-#gpsProgressOverlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:white; z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+/* 🔹 ANALİZ OVERLAY CSS (Geliştirilmiş) */
+#gpsProgressOverlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); color:white; z-index:9999; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+.analysis-card { border:2px solid #3498db; padding:25px; border-radius:15px; background:#1a252f; width:95%; max-width:450px; max-height:90vh; overflow-y:auto; box-shadow: 0 0 25px rgba(52, 152, 219, 0.4); }
+.gps-table { text-align:left; background:#000; padding:10px; border-radius:8px; font-family:monospace; font-size:10px; margin:15px 0; max-height:200px; overflow-y:auto; border:1px solid #333; }
+.gps-header { color:#f1c40f; border-bottom:1px solid #333; padding-bottom:5px; margin-bottom:5px; display:flex; justify-content:space-between; font-weight:bold; }
+.gps-row { display:flex; justify-content:space-between; border-bottom:1px solid #111; padding:4px 0; }
 </style>
 </head>
 <body>
@@ -27,16 +32,29 @@ button:hover { opacity:0.9; }
 <button id="logoutBtn">Çıkış</button>
 
 <div id="gpsProgressOverlay">
-    <div style="border:2px solid #3498db; padding:30px; border-radius:15px; background:#1a252f;">
-        <h2 style="color:#3498db; margin:0;">HASSAS REFERANS KAYDI</h2>
-        <p id="gpsStatusMsg">Sinyal aranıyor...</p>
-        <div id="gpsProgressText" style="font-size:50px; font-weight:bold; color:#2ecc71; margin:15px 0;">0 / 10</div>
-        <div style="width:200px; height:10px; background:#444; border-radius:5px; margin:0 auto; overflow:hidden;">
-            <div id="gpsProgressBar" style="width:0%; height:100%; background:#2ecc71; transition:0.3s;"></div>
+    <div class="analysis-card">
+        <h2 style="color:#3498db; margin:0; font-size:18px; letter-spacing:1px;">CGA HASSAS GPS ANALİZİ</h2>
+        <p id="gpsStatusMsg" style="font-size:12px; color:#bdc3c7; margin-top:5px;">Sinyal aranıyor, lütfen bekleyin...</p>
+        
+        <div id="gpsProgressText" style="font-size:45px; font-weight:bold; color:#2ecc71; margin:5px 0;">0 / 10</div>
+        
+        <div class="gps-table">
+            <div class="gps-header">
+                <span style="width:10%">#</span>
+                <span style="width:65%">Koordinat (Lat, Lon)</span>
+                <span style="width:25%; text-align:right;">Sapma</span>
+            </div>
+            <div id="gpsRows"></div>
         </div>
-        <div style="margin-top:20px; display:flex; gap:10px; justify-content:center;">
-            <button id="gpsSaveBtn" disabled style="background:#27ae60; color:white; padding:10px; width:120px; opacity:0.5;">KAYDET</button>
-            <button id="gpsCancelBtn" style="background:#c0392b; color:white; padding:10px; width:120px;">İPTAL</button>
+
+        <div id="resultArea" style="display:none; margin-top:10px; padding:10px; background:rgba(46, 204, 113, 0.1); border:1px solid #2ecc71; border-radius:8px;">
+            <b style="color:#2ecc71; font-size:13px;">HESAPLANAN ORTALAMA</b><br>
+            <div id="finalAvgText" style="font-size:11px; font-family:monospace; margin-top:5px;"></div>
+        </div>
+
+        <div style="margin-top:20px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">
+            <button id="gpsSaveBtn" disabled style="background:#27ae60; color:white; flex:1; min-width:120px; opacity:0.5;">MÜHÜRLE</button>
+            <button id="gpsCancelBtn" style="background:#c0392b; color:white; flex:1; min-width:120px;">İPTAL</button>
         </div>
     </div>
 </div>
@@ -61,7 +79,6 @@ const logoutBtn = document.getElementById('logoutBtn');
 
 logoutBtn.addEventListener('click', ()=> { window.location.href = 'mod.html'; });
 
-// QR kütüphanesi
 const QR_SCRIPT = document.createElement('script');
 QR_SCRIPT.src = "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js";
 document.body.appendChild(QR_SCRIPT);
@@ -85,6 +102,15 @@ const siteConfigSnap = await get(ref(merkezDb, "sites/" + selectedSiteId + "/con
 const siteConfig = siteConfigSnap.val();
 const siteApp = initializeApp(siteConfig, selectedSiteId);
 const db = getDatabase(siteApp);
+
+// 🔹 MESAFE HESAPLAMA (Sapma Analizi İçin)
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+    const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
 
 function calculateAvg(list) {
     const sum = list.reduce((a, b) => ({ lat: a.lat + b.lat, lon: a.lon + b.lon }), { lat: 0, lon: 0 });
@@ -123,8 +149,8 @@ function addQRToList(qrData) {
     const infoDiv = document.createElement('div');
     infoDiv.style.flex = "1";
     infoDiv.style.marginLeft = "15px";
-    const coords = qrData.lat ? `(${qrData.lat.toFixed(4)}, ${qrData.lon.toFixed(4)})` : '(Koordinat Yok)';
-    infoDiv.innerHTML = `<strong>${qrData.name}</strong><br><small>ID: ${qrData.qrId}</small><br><div class="gps-info">Koordinat: ${coords}</div>`;
+    const coords = qrData.lat ? `<span class="gps-active">[${qrData.lat.toFixed(6)}, ${qrData.lon.toFixed(6)}]</span>` : '(Koordinat Yok)';
+    infoDiv.innerHTML = `<strong>${qrData.name}</strong><br><small>ID: ${qrData.qrId}</small><br><div class="gps-info">Referans: ${coords}</div>`;
 
     const btnGroup = document.createElement('div');
     btnGroup.style.display = "flex";
@@ -132,17 +158,17 @@ function addQRToList(qrData) {
     btnGroup.style.gap = "5px";
 
     const coordBtn = document.createElement('button');
-    coordBtn.textContent = 'Koordinat Ata';
+    coordBtn.textContent = '📍 Koordinat Ata';
     coordBtn.style.background = '#3498db';
     coordBtn.style.color = '#fff';
-    coordBtn.style.fontSize = '12px';
+    coordBtn.style.fontSize = '11px';
     coordBtn.addEventListener('click', () => assignCoordinates(qrData));
 
     const downloadBtn = document.createElement('button');
     downloadBtn.textContent = 'İndir';
     downloadBtn.style.background = '#27ae60';
     downloadBtn.style.color = '#fff';
-    downloadBtn.style.fontSize = '12px';
+    downloadBtn.style.fontSize = '11px';
     downloadBtn.onclick = () => {
         const canvas = qrDiv.querySelector('canvas');
         const tempCanvas = document.createElement('canvas');
@@ -167,44 +193,88 @@ function addQRToList(qrData) {
     qrList.appendChild(div);
 }
 
+// 🔹 ANALİZLİ HASSAS KOORDİNAT ATA FONKSİYONU
 async function assignCoordinates(qrData) {
-    if (!navigator.geolocation) return alert("GPS Yok!");
+    if (!navigator.geolocation) return alert("GPS Sinyali Alınamıyor!");
+    
     const overlay = document.getElementById('gpsProgressOverlay');
     const statusMsg = document.getElementById('gpsStatusMsg');
     const progressText = document.getElementById('gpsProgressText');
-    const progressBar = document.getElementById('gpsProgressBar');
     const saveBtn = document.getElementById('gpsSaveBtn');
     const cancelBtn = document.getElementById('gpsCancelBtn');
+    const gpsRows = document.getElementById('gpsRows');
+    const resultArea = document.getElementById('resultArea');
+    const finalAvgText = document.getElementById('finalAvgText');
 
     overlay.style.display = 'flex';
+    gpsRows.innerHTML = '';
+    resultArea.style.display = 'none';
     let collected = [];
     const max = 10;
     saveBtn.disabled = true; saveBtn.style.opacity = "0.5";
-    progressText.innerText = "0 / 10"; progressBar.style.width = "0%";
+    progressText.innerText = "0 / 10";
+    statusMsg.innerText = "Sinyal aranıyor, lütfen sabit durun...";
+
+    const geoOpts = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     const collectInterval = setInterval(() => {
         if (collected.length >= max) return;
+
         navigator.geolocation.getCurrentPosition(pos => {
-            collected.push({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-            statusMsg.innerText = "Sinyal alınıyor, sabit kalın...";
-            progressText.innerText = `${collected.length} / ${max}`;
-            progressBar.style.width = `${(collected.length / max) * 100}%`;
-            if (collected.length >= max) {
-                saveBtn.disabled = false; saveBtn.style.opacity = "1";
-                statusMsg.innerText = "Ölçüm bitti, onay bekliyor.";
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            let diffText = "Referans";
+
+            if (collected.length > 0) {
+                const prev = collected[collected.length - 1];
+                const d = getDistance(prev.lat, prev.lon, lat, lon);
+                const color = d > 15 ? '#e74c3c' : (d > 5 ? '#f1c40f' : '#2ecc71');
+                diffText = `<span style="color:${color}">${d.toFixed(2)}m</span>`;
             }
-        }, err => { statusMsg.innerText = "Sinyal bekleniyor..."; }, { enableHighAccuracy: true, timeout: 5000 });
-    }, 1500);
+
+            collected.push({ lat, lon });
+            
+            // Tabloya Ekle
+            const row = document.createElement('div');
+            row.className = 'gps-row';
+            row.innerHTML = `<span>#${collected.length}</span><span>${lat.toFixed(7)}, ${lon.toFixed(7)}</span><span style="text-align:right;">${diffText}</span>`;
+            gpsRows.appendChild(row);
+            gpsRows.scrollTop = gpsRows.scrollHeight;
+
+            progressText.innerText = `${collected.length} / ${max}`;
+
+            if (collected.length >= max) {
+                clearInterval(collectInterval);
+                const avg = calculateAvg(collected);
+                finalAvgText.innerText = `LAT: ${avg.lat.toFixed(8)}\nLON: ${avg.lon.toFixed(8)}`;
+                resultArea.style.display = 'block';
+                saveBtn.disabled = false; 
+                saveBtn.style.opacity = "1";
+                statusMsg.innerText = "Analiz Tamamlandı.";
+            }
+        }, err => { statusMsg.innerText = "Sinyal bekleniyor (Zayıf)..."; }, geoOpts);
+    }, 2000); // 2 saniyede bir hassas ölçüm
 
     saveBtn.onclick = async () => {
         const avg = calculateAvg(collected);
         clearInterval(collectInterval);
         overlay.style.display = 'none';
-        await update(ref(db, 'qrNoktas/' + qrData.qrId), { lat: avg.lat, lon: avg.lon });
-        alert("Koordinat mühürlendi!");
+        try {
+            await update(ref(db, 'qrNoktas/' + qrData.qrId), { 
+                lat: avg.lat, 
+                lon: avg.lon,
+                mühür_tarihi: serverTimestamp() 
+            });
+            alert("Nokta Başarıyla Mühürlendi!");
+        } catch (e) {
+            alert("Hata: Kayıt yapılamadı!");
+        }
     };
 
-    cancelBtn.onclick = () => { clearInterval(collectInterval); overlay.style.display = 'none'; };
+    cancelBtn.onclick = () => { 
+        clearInterval(collectInterval); 
+        overlay.style.display = 'none'; 
+    };
 }
 </script>
 </body>
